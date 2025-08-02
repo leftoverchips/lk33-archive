@@ -414,7 +414,7 @@ export default function LK33Archive() {
                   >
                     <Link href={video.videoLink} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-3 h-3 mr-1" />
-                      click here
+                      Video Link
                     </Link>
                   </Button>
                   {video.fansubLink && (
@@ -426,7 +426,7 @@ export default function LK33Archive() {
                     >
                       <Link href={video.fansubLink} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="w-3 h-3 mr-1" />
-                        click here
+                        Subtitles (SRT)
                       </Link>
                     </Button>
                   )}

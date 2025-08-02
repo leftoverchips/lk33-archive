@@ -168,7 +168,7 @@ export default function VideoDetailPage({ params }: { params: { id: string } }) 
               >
                 <Link href={video.videoLink} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="w-4 h-4 mr-2" />
-                  click here
+                  Video Link
                 </Link>
               </Button>
               {video.fansubLink && (
@@ -179,7 +179,7 @@ export default function VideoDetailPage({ params }: { params: { id: string } }) 
                 >
                   <Link href={video.fansubLink} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    click here
+                    Subtitles (SRT)
                   </Link>
                 </Button>
               )}

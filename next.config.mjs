@@ -8,6 +8,15 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+    domains: ['simp6.selti-delivery.ru'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'simp6.selti-delivery.ru',
+        port: '',
+        pathname: '/images3/**',
+      },
+    ],
   },
 }
 

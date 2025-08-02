@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Plus, ExternalLink, Edit, Trash2, Search, Moon, Sun } from "lucide-react"
+import { Plus, ExternalLink, Edit, Trash2, Search, Moon, Sun, LogOut } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -13,11 +13,16 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useAuth } from "@/contexts/AuthContext"
+import { LoginDialog } from "@/components/LoginDialog"
+import { GuestWarningDialog } from "@/components/GuestWarningDialog"
+import { supabase } from "@/lib/supabase"
 
 interface VideoEntry {
   id: string
   title: string
   screenshot: string
+  screenshot2?: string
   videoLink: string
   fansubLink?: string
   dateAdded: string
@@ -25,15 +30,17 @@ interface VideoEntry {
 }
 
 export default function LK33Archive() {
+  const { user, isAdmin, signOut, loading } = useAuth()
   const [videos, setVideos] = useState<VideoEntry[]>([
     {
       id: "1",
-      title: "Relaxing Rain Sounds ASMR",
-      screenshot: "/placeholder.svg?height=200&width=300&text=Rain+ASMR",
-      videoLink: "https://example.com/video1",
-      fansubLink: "https://example.com/fansub1",
-      dateAdded: "2024-01-15",
-      description: "Peaceful rain sounds for relaxation and sleep",
+      title: "【耳舐め✨ASMR】巨乳先生とマンツーマンで秘密授業♡集中できるように××サポ＆相互××でスッキリしよ♡【KU100】2025-07-27",
+      screenshot: "https://simp6.selti-delivery.ru/images3/Screenshot_5884f0535faea9fc0.md.png",
+      screenshot2: "https://simp6.selti-delivery.ru/images3/Screenshot_8611f97ef0011bce9.md.png",
+      videoLink: "https://ouo.io/zq0eq60",
+      fansubLink: "https://oii.la/8OZ5Re",
+      dateAdded: "2025-07-27",
+      description: "Password: lk33",
     },
     {
       id: "2",
@@ -59,49 +66,107 @@ export default function LK33Archive() {
   const [editingVideo, setEditingVideo] = useState<VideoEntry | null>(null)
   const [formData, setFormData] = useState({
     title: "",
-    screenshot: "",
     videoLink: "",
-    fansubLink: "",
+    fansubSrt: "",
     description: "",
   })
+  const [image1File, setImage1File] = useState<File | null>(null)
+  const [image2File, setImage2File] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [showGuestWarning, setShowGuestWarning] = useState(false)
 
   const filteredVideos = videos.filter((video) => video.title.toLowerCase().includes(searchTerm.toLowerCase()))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const uploadImage = async (file: File, fileName: string): Promise<string> => {
+    const { data, error } = await supabase.storage
+      .from('image-bucket')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (error) {
+      throw error
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('image-bucket')
+      .getPublicUrl(data.path)
+
+    return publicUrl
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const newVideo: VideoEntry = {
-      id: editingVideo?.id || Date.now().toString(),
-      title: formData.title,
-      screenshot:
-        formData.screenshot || "/placeholder.svg?height=200&width=300&text=" + encodeURIComponent(formData.title),
-      videoLink: formData.videoLink,
-      fansubLink: formData.fansubLink || undefined,
-      dateAdded: editingVideo?.dateAdded || new Date().toISOString().split("T")[0],
-      description: formData.description || undefined,
-    }
+    setUploading(true)
 
-    if (editingVideo) {
-      setVideos(videos.map((v) => (v.id === editingVideo.id ? newVideo : v)))
-    } else {
-      setVideos([newVideo, ...videos])
-    }
+    try {
+      let image1Url = ""
+      let image2Url = ""
 
-    setFormData({ title: "", screenshot: "", videoLink: "", fansubLink: "", description: "" })
-    setEditingVideo(null)
-    setIsAddDialogOpen(false)
+      // Upload image 1 (required)
+      if (image1File) {
+        const fileName1 = `${Date.now()}-1-${image1File.name}`
+        image1Url = await uploadImage(image1File, fileName1)
+      } else if (!editingVideo) {
+        alert("Please select the first image")
+        setUploading(false)
+        return
+      } else {
+        image1Url = editingVideo.screenshot
+      }
+
+      // Upload image 2 (optional)
+      if (image2File) {
+        const fileName2 = `${Date.now()}-2-${image2File.name}`
+        image2Url = await uploadImage(image2File, fileName2)
+      } else if (editingVideo) {
+        image2Url = editingVideo.screenshot2 || ""
+      }
+
+      const newVideo: VideoEntry = {
+        id: editingVideo?.id || Date.now().toString(),
+        title: formData.title,
+        screenshot: image1Url,
+        screenshot2: image2Url || undefined,
+        videoLink: formData.videoLink,
+        fansubLink: formData.fansubSrt || undefined,
+        dateAdded: editingVideo?.dateAdded || new Date().toISOString().split("T")[0],
+        description: formData.description || undefined,
+      }
+
+      if (editingVideo) {
+        setVideos(videos.map((v) => (v.id === editingVideo.id ? newVideo : v)))
+      } else {
+        setVideos([newVideo, ...videos])
+      }
+
+      setFormData({ title: "", videoLink: "", fansubSrt: "", description: "" })
+      setImage1File(null)
+      setImage2File(null)
+      setEditingVideo(null)
+      setIsAddDialogOpen(false)
+    } catch (error) {
+      console.error('Error uploading images:', error)
+      alert('Error uploading images. Please try again.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleEdit = (video: VideoEntry) => {
     setEditingVideo(video)
     setFormData({
       title: video.title,
-      screenshot: video.screenshot,
       videoLink: video.videoLink,
-      fansubLink: video.fansubLink || "",
+      fansubSrt: video.fansubLink || "",
       description: video.description || "",
     })
+    // Reset file inputs when editing (user can upload new images if needed)
+    setImage1File(null)
+    setImage2File(null)
     setIsAddDialogOpen(true)
   }
 
@@ -109,8 +174,18 @@ export default function LK33Archive() {
     setVideos(videos.filter((v) => v.id !== id))
   }
 
+  const handleAddVideoClick = () => {
+    if (!isAdmin) {
+      setShowGuestWarning(true)
+      return
+    }
+    setIsAddDialogOpen(true)
+  }
+
   const resetForm = () => {
-    setFormData({ title: "", screenshot: "", videoLink: "", fansubLink: "", description: "" })
+    setFormData({ title: "", videoLink: "", fansubSrt: "", description: "" })
+    setImage1File(null)
+    setImage2File(null)
     setEditingVideo(null)
   }
 
@@ -137,6 +212,34 @@ export default function LK33Archive() {
               >
                 {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </Button>
+
+              {user ? (
+                <>
+                  <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    Welcome, {user.email}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={signOut}
+                    className={`${isDarkMode ? "hover:bg-gray-800 text-white" : "hover:bg-gray-100 text-black"}`}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <LoginDialog isDarkMode={isDarkMode} />
+              )}
+
+              <Button
+                onClick={handleAddVideoClick}
+                className={`${isDarkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"}`}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Video
+              </Button>
+
               <Dialog
                 open={isAddDialogOpen}
                 onOpenChange={(open) => {
@@ -144,14 +247,6 @@ export default function LK33Archive() {
                   if (!open) resetForm()
                 }}
               >
-                <DialogTrigger asChild>
-                  <Button
-                    className={`${isDarkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"}`}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Video
-                  </Button>
-                </DialogTrigger>
                 <DialogContent
                   className={`border-gray-300 max-w-md ${isDarkMode ? "bg-black text-white border-gray-700" : "bg-white text-black border-gray-300"}`}
                 >
@@ -170,14 +265,35 @@ export default function LK33Archive() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="screenshot">Screenshot URL</Label>
+                      <Label htmlFor="image1">Image 1 {editingVideo && "(Leave empty to keep current image)"}</Label>
                       <Input
-                        id="screenshot"
-                        value={formData.screenshot}
-                        onChange={(e) => setFormData({ ...formData, screenshot: e.target.value })}
+                        id="image1"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setImage1File(e.target.files?.[0] || null)}
                         className={`${isDarkMode ? "bg-gray-900 border-gray-700 text-white" : "bg-white border-gray-300 text-black"}`}
-                        placeholder="Leave empty for auto-generated placeholder"
+                        required={!editingVideo}
                       />
+                      {editingVideo && editingVideo.screenshot && (
+                        <p className={`text-xs mt-1 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                          Current: {editingVideo.screenshot.split('/').pop()}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="image2">Image 2 (Optional)</Label>
+                      <Input
+                        id="image2"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setImage2File(e.target.files?.[0] || null)}
+                        className={`${isDarkMode ? "bg-gray-900 border-gray-700 text-white" : "bg-white border-gray-300 text-black"}`}
+                      />
+                      {editingVideo && editingVideo.screenshot2 && (
+                        <p className={`text-xs mt-1 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                          Current: {editingVideo.screenshot2.split('/').pop()}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="videoLink">Video Link</Label>
@@ -190,12 +306,13 @@ export default function LK33Archive() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="fansubLink">Fansub Link (Optional)</Label>
+                      <Label htmlFor="fansubSrt">Fansub SRT (Optional)</Label>
                       <Input
-                        id="fansubLink"
-                        value={formData.fansubLink}
-                        onChange={(e) => setFormData({ ...formData, fansubLink: e.target.value })}
+                        id="fansubSrt"
+                        value={formData.fansubSrt}
+                        onChange={(e) => setFormData({ ...formData, fansubSrt: e.target.value })}
                         className={`${isDarkMode ? "bg-gray-900 border-gray-700 text-white" : "bg-white border-gray-300 text-black"}`}
+                        placeholder="Fansub SRT link"
                       />
                     </div>
                     <div>
@@ -210,9 +327,10 @@ export default function LK33Archive() {
                     </div>
                     <Button
                       type="submit"
+                      disabled={uploading}
                       className={`w-full ${isDarkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"}`}
                     >
-                      {editingVideo ? "Update Video" : "Add Video"}
+                      {uploading ? "Uploading..." : (editingVideo ? "Update Video" : "Add Video")}
                     </Button>
                   </form>
                 </DialogContent>
@@ -246,7 +364,7 @@ export default function LK33Archive() {
             </p>
             {!searchTerm && (
               <Button
-                onClick={() => setIsAddDialogOpen(true)}
+                onClick={handleAddVideoClick}
                 className={`mt-4 ${isDarkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"}`}
               >
                 Add Your First Video
@@ -262,13 +380,15 @@ export default function LK33Archive() {
               >
                 <CardContent className="p-0">
                   <div className="relative overflow-hidden rounded-t-lg">
-                    <Image
-                      src={video.screenshot || "/placeholder.svg"}
-                      alt={video.title}
-                      width={300}
-                      height={200}
-                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
+                    <Link href={`/video/${video.id}`} className="block">
+                      <Image
+                        src={video.screenshot || "/placeholder.svg"}
+                        alt={video.title}
+                        width={300}
+                        height={200}
+                        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                      />
+                    </Link>
                   </div>
                   <div className="p-4">
                     <h3
@@ -294,7 +414,7 @@ export default function LK33Archive() {
                   >
                     <Link href={video.videoLink} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-3 h-3 mr-1" />
-                      Video
+                      click here
                     </Link>
                   </Button>
                   {video.fansubLink && (
@@ -306,7 +426,7 @@ export default function LK33Archive() {
                     >
                       <Link href={video.fansubLink} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="w-3 h-3 mr-1" />
-                        Fansub
+                        click here
                       </Link>
                     </Button>
                   )}
@@ -332,6 +452,12 @@ export default function LK33Archive() {
           </div>
         )}
       </main>
+
+      <GuestWarningDialog
+        isOpen={showGuestWarning}
+        onClose={() => setShowGuestWarning(false)}
+        isDarkMode={isDarkMode}
+      />
     </div>
   )
 }
